@@ -25,7 +25,6 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
 Description=Gitea (Git with a cup of tea)
 After=syslog.target
 After=network.target
-After=mysql.service # or postgresql.service, depending on your database
 
 [Service]
 RestartSec=2s
@@ -40,7 +39,6 @@ Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
 [Install]
 WantedBy=multi-user.target
 EOF
-
     ((step++))
 
     # 3. Get Domain and Email
@@ -55,10 +53,12 @@ EOF
     ((step++))
 
     # 5. Configure Gitea 
-    echo "[$step/$total_steps] Configuring Gitea..."
-    # (a) Set Domain in Gitea Configuration
+
+    # (a) Set Domain and SQLite in Gitea Configuration
     gitea_config=/etc/gitea/app.ini # Adjust if your Gitea config is elsewhere
     sed -i "s/DOMAIN = localhost/DOMAIN = $domain/g" "$gitea_config" >/dev/null 2>&1
+    sed -i "s/DB_TYPE\s*=\s*mysql/DB_TYPE = sqlite3/g" "$gitea_config" >/dev/null 2>&1
+    sed -i "s/PATH\s*=\s*data\/gitea.db/PATH\s*=\s*\/var\/lib\/gitea\/gitea.db/g" "$gitea_config" >/dev/null 2>&1
 
     # (b) Configure HTTPS (Assuming Certbot places certs in /etc/letsencrypt/live/)
     sed -i "s/\# CERT_FILE = custom\/https-cert.pem/CERT_FILE = \/etc\/letsencrypt\/live\/$domain\/fullchain.pem/g" "$gitea_config" >/dev/null 2>&1
