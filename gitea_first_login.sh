@@ -11,12 +11,21 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     step=1
     total_steps=5 # Adjust if you add/remove steps
 
-    # 1. Install Gitea
+    # 1. Install Gitea (with architecture detection)
     echo "[$step/$total_steps] Installing Gitea..."
-    wget -O /tmp/gitea https://dl.gitea.io/gitea/$(curl -s https://dl.gitea.io/gitea/latest/ | grep -o 'gitea-[0-9.]*-linux-amd64' | head -n 1) >/dev/null 2>&1
-    chmod +x /tmp/gitea >/dev/null 2>&1
-    mv /tmp/gitea /usr/local/bin/gitea >/dev/null 2>&1
-    ((step++))
+    arch=$(uname -m)
+    if [ "$arch" = "x86_64" ]; then
+        gitea_arch="linux-amd64"
+    elif [ "$arch" = "i686" ]; then # 32-bit
+        gitea_arch="linux-386"
+    elif [[ "$arch" == "arm"* ]]; then # Adjust for specific ARM version if needed
+        gitea_arch="linux-arm" # or linux-arm64 for 64-bit ARM
+    else
+        echo "Unsupported architecture: $arch"
+        exit 1
+    fi
+
+    wget -O /tmp/gitea https://dl.gitea.io/gitea/$(curl -s https://dl.gitea.io/gitea/latest/ | grep -o "gitea-[0-9.]*-$gitea_arch" | head -n 1) >/dev/null 2>&1
 
     # 2. Create 'git' user and directories
     echo "[$step/$total_steps] Creating Gitea user and directories..."
