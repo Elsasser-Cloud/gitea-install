@@ -18,7 +18,15 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     mv /tmp/gitea /usr/local/bin/gitea >/dev/null 2>&1
     ((step++))
 
-    # 2. Create Gitea systemd service file
+    # 2. Create 'git' user and directories
+    echo "[$step/$total_steps] Creating Gitea user and directories..."
+    useradd --system --shell /bin/bash --comment 'Gitea' git >/dev/null 2>&1 
+    mkdir -p /var/lib/gitea/{custom,data,indexers,log,public,tmp} >/dev/null 2>&1
+    chown -R git:git /var/lib/gitea >/dev/null 2>&1
+    chmod -R g+rwX /var/lib/gitea >/dev/null 2>&1
+    ((step++))
+
+    # 3. Create Gitea systemd service file
     echo "[$step/$total_steps] Creating Gitea service..."
     cat << EOF > /etc/systemd/system/gitea.service
 [Unit]
@@ -41,19 +49,19 @@ WantedBy=multi-user.target
 EOF
     ((step++))
 
-    # 3. Get Domain and Email
+    # 4. Get Domain and Email
     echo "[$step/$total_steps] Gathering information..."
     read -p "Enter your domain name (e.g., git.example.com): " domain
     read -p "Enter your email address for Let's Encrypt: " email
     ((step++))
 
-    # 4. Request Let's Encrypt Certificate
+    # 5. Request Let's Encrypt Certificate
     echo "[$step/$total_steps] Requesting SSL certificate..."
     certbot certonly --standalone -d "$domain" --agree-tos --email "$email" --non-interactive >/dev/null 2>&1
     ((step++))
 
-    # 5. Configure Gitea 
-
+    # 6. Configure Gitea 
+    echo "[$step/$total_steps] Configuring Gitea..."
     # (a) Set Domain and SQLite in Gitea Configuration
     gitea_config=/etc/gitea/app.ini # Adjust if your Gitea config is elsewhere
     sed -i "s/DOMAIN = localhost/DOMAIN = $domain/g" "$gitea_config" >/dev/null 2>&1
@@ -64,7 +72,7 @@ EOF
     sed -i "s/\# CERT_FILE = custom\/https-cert.pem/CERT_FILE = \/etc\/letsencrypt\/live\/$domain\/fullchain.pem/g" "$gitea_config" >/dev/null 2>&1
     sed -i "s/\# KEY_FILE  = custom\/https-key.pem/KEY_FILE  = \/etc\/letsencrypt\/live\/$domain\/privkey.pem/g" "$gitea_config" >/dev/null 2>&1
 
-    # 6. Enable and start Gitea service
+    # 7. Enable and start Gitea service
     systemctl daemon-reload >/dev/null 2>&1
     systemctl enable gitea >/dev/null 2>&1
     systemctl start gitea >/dev/null 2>&1
