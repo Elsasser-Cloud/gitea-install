@@ -97,6 +97,7 @@ EOF
 
 
     # 7. Configure Gitea 
+    ((step++))
     echo "[$step/$total_steps] Configuring Gitea..."
     # (a) Set Domain and SQLite in Gitea Configuration
     gitea_config=/etc/gitea/app.ini # Adjust if your Gitea config is elsewhere
