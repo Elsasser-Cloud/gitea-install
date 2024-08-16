@@ -14,18 +14,36 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     chown -R git:git /var/lib/gitea
     chmod -R g+rwX /var/lib/gitea
 
-    # (You might need to create a systemd unit file for Gitea; check its documentation)
-    systemctl enable gitea
-    systemctl start gitea
+    # 2. Create Gitea systemd service file
+    cat << EOF > /etc/systemd/system/gitea.service
+[Unit]
+Description=Gitea (Git with a cup of tea)
+After=syslog.target
+After=network.target
+After=mysql.service # or postgresql.service, depending on your database
 
-    # 2. Get Domain and Email
+[Service]
+RestartSec=2s
+Type=simple
+User=git
+Group=git
+WorkingDirectory=/var/lib/gitea/
+ExecStart=/usr/local/bin/gitea web --config /etc/gitea/app.ini
+Restart=always
+Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # 3. Get Domain and Email
     read -p "Enter your domain name (e.g., git.example.com): " domain
     read -p "Enter your email address for Let's Encrypt: " email
 
-    # 3. Request Let's Encrypt Certificate
+    # 4. Request Let's Encrypt Certificate
     certbot certonly --standalone -d "$domain" --agree-tos --email "$email" --non-interactive
 
-    # 4. Configure Gitea 
+    # 5. Configure Gitea 
 
     # (a) Set Domain in Gitea Configuration
     gitea_config=/etc/gitea/app.ini # Adjust if your Gitea config is elsewhere
@@ -35,8 +53,10 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     sed -i "s/\# CERT_FILE = custom\/https-cert.pem/CERT_FILE = \/etc\/letsencrypt\/live\/$domain\/fullchain.pem/g" "$gitea_config"
     sed -i "s/\# KEY_FILE  = custom\/https-key.pem/KEY_FILE  = \/etc\/letsencrypt\/live\/$domain\/privkey.pem/g" "$gitea_config"
 
-    # Restart Gitea to apply changes
-    systemctl restart gitea
+    # 6. Enable and start Gitea service
+    systemctl daemon-reload
+    systemctl enable gitea
+    systemctl start gitea
 
     touch /var/lib/gitea/.first_login_complete
     echo "Gitea setup complete! Access it at https://$domain"
