@@ -1,137 +1,134 @@
 #!/bin/bash
 
-if [ ! -f /var/lib/gitea/.first_login_complete ]; then
+# Detect system architecture
+ARCH=$(uname -m)
+if [[ $ARCH == "x86_64" ]]; then
+    GITEA_ARCH="amd64"
+elif [[ $ARCH == "aarch64" ]]; then
+    GITEA_ARCH="arm64"
+else
+    echo "Unsupported architecture: $ARCH"
+    exit 1
+fi
 
-    clear # Clear the terminal for a clean start
+# Prompt for Gitea configurations
+echo "Please enter the domain for Gitea (e.g., gitea.example.com):"
+read -r DOMAIN
 
-    echo "----------------------------------------"
-    echo "  ELSASSER CLOUD - Gitea Setup Wizard  "
-    echo "----------------------------------------"
+echo "Please enter the Gitea admin username:"
+read -r ADMIN_USER
 
-    step=1
-    total_steps=6 # Adjusted for the additional step
+echo "Please enter the Gitea admin email:"
+read -r ADMIN_EMAIL
 
-    # 1. Install Gitea (with enhanced architecture detection)
-    echo "[$step/$total_steps] Installing Gitea..."
-    arch=$(uname -m)
-    case "$arch" in
-        x86_64) gitea_arch="linux-amd64" ;;
-        i386|i686) gitea_arch="linux-386" ;;
-        armv7l) gitea_arch="linux-armv7" ;;
-        aarch64) gitea_arch="linux-arm64" ;;
-        *) 
-            echo "Unsupported architecture: $arch"
-            exit 1
-            ;;
-    esac
+echo "Please enter the Gitea admin password:"
+read -r -s ADMIN_PASS
 
-    # Manually specify the download URL (replace with the actual URL from the Gitea website)
-    wget_url="https://dl.gitea.io/gitea/1.18.5/gitea-1.18.5-$gitea_arch" 
+# Prompt for Let's Encrypt SSL certificate setup
+echo "Do you want to set up a Let's Encrypt SSL certificate for Gitea? (yes/no):"
+read -r USE_LETS_ENCRYPT
 
-    # Download (removed verbose output and --max-redirect=0)
-    wget -O /tmp/gitea "$wget_url" >/dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo "Error downloading Gitea binary. Please check the URL and try again."
-        exit 1
-    fi
+# Update and install dependencies
+apt-get update
+apt-get upgrade -y
+apt-get install -y git wget certbot sqlite3
 
-    chmod +x /tmp/gitea >/dev/null 2>&1
-    mv /tmp/gitea /usr/local/bin/gitea >/dev/null 2>&1
-    ((step++))
+# Create Gitea user
+useradd --system --create-home --home-dir /var/lib/gitea --shell /bin/bash --comment 'Gitea application' git
 
-    # 2. Create 'git' user and directories (using the official adduser command)
-    echo "[$step/$total_steps] Creating Gitea user and directories..."
-    adduser \
-       --system \
-       --shell /bin/bash \
-       --gecos 'Git Version Control' \
-       --group \
-       --disabled-password \
-       --home /home/git \
-       git >/dev/null 2>&1
+# Create necessary directories
+mkdir -p /etc/gitea /var/lib/gitea /var/log/gitea
+chown git:git /etc/gitea /var/lib/gitea /var/log/gitea
+chmod 750 /var/lib/gitea /var/log/gitea
 
-    mkdir -p /var/lib/gitea/{custom,data,indexers,log,public,tmp} >/dev/null 2>&1
-    chown -R git:git /var/lib/gitea >/dev/null 2>&1
-    chmod -R g+rwX /var/lib/gitea >/dev/null 2>&1
-    ((step++))
+# Download Gitea binary based on detected architecture
+GITEA_VERSION="1.18.0"
+wget -O /usr/local/bin/gitea https://dl.gitea.io/gitea/${GITEA_VERSION}/gitea-${GITEA_VERSION}-linux-${GITEA_ARCH}
+chmod +x /usr/local/bin/gitea
 
-    # 3. Ask if SSL certificate is needed and get domain/email if so
-    echo "[$step/$total_steps] SSL Certificate configuration"
-    while true; do
-        read -p "Do you want to request a Let's Encrypt SSL certificate? (y/n): " yn
-        case $yn in
-            [Yy]* ) 
-                request_ssl=true; 
-                read -p "Enter your domain name (e.g., git.example.com): " domain
-                read -p "Enter your email address for Let's Encrypt: " email
-                break;;
-            [Nn]* ) 
-                request_ssl=false; 
-                domain="localhost" # Set a default domain if no SSL is requested
-                break;;
-            * ) echo "Please answer yes or no.";;
-        esac
-    done
-    ((step++))
+# Create a base Gitea configuration file
+cat <<EOF > /etc/gitea/app.ini
+APP_NAME = Gitea: Git with a cup of tea
+RUN_USER = git
+RUN_MODE = prod
 
-    if $request_ssl; then
-        # 4. Request Let's Encrypt Certificate
-        echo "[$step/$total_steps] Requesting SSL certificate..."
-        certbot certonly --standalone -d "$domain" --agree-tos --email "$email" --non-interactive >/dev/null 2>&1
-        ((step++))
-    else
-        echo "Skipping SSL certificate request."
-    fi
-
-    # 5. Create /etc/gitea directory and generate app.ini with gathered info
-    echo "[$step/$total_steps] Configuring Gitea..."
-    mkdir -p /etc/gitea >/dev/null 2>&1
-    chown -R git:git /etc/gitea >/dev/null 2>&1
-    chmod -R g+rwX /etc/gitea >/dev/null 2>&1
-
-    cat << EOF > /etc/gitea/app.ini
 [server]
-DOMAIN           = $domain
-HTTP_PORT       = 3000              
-ROOT_URL         = http://$domain:3000/ # Use http:// by default
+DOMAIN           = 
+HTTP_PORT        = 80
+ROOT_URL         = 
+DISABLE_SSH      = false
+SSH_PORT         = 22
+START_SSH_SERVER = true
+OFFLINE_MODE     = false
+LFS_START_SERVER = true
+LFS_CONTENT_PATH = /var/lib/gitea/data/lfs
+PROTOCOL         = http
+CERT_FILE        = 
+KEY_FILE         = 
 
 [database]
-DB_TYPE          = sqlite3
-PATH             = /var/lib/gitea/gitea.db 
+DB_TYPE  = sqlite3
+PATH     = /var/lib/gitea/data/gitea.db
 
 [security]
-INSTALL_LOCK     = true
-SECRET_KEY       = <generate_a_strong_secret_key> 
+INSTALL_LOCK   = true
+SECRET_KEY     = 
+INTERNAL_TOKEN = 
 
-$(if $request_ssl; then
-    cat << HTTPS_CONFIG
-[server]
-PROTOCOL         = https
-CERT_FILE        = /etc/letsencrypt/live/$domain/fullchain.pem
-KEY_FILE         = /etc/letsencrypt/live/$domain/privkey.pem
+[service]
+REGISTER_EMAIL_CONFIRM = false
+ENABLE_NOTIFY_MAIL     = false
+DISABLE_REGISTRATION   = true
+ALLOW_ONLY_EXTERNAL_REGISTRATION = false
+ENABLE_CAPTCHA = false
+DEFAULT_KEEP_EMAIL_PRIVATE = false
+DEFAULT_ALLOW_CREATE_ORGANIZATION = true
+DEFAULT_ENABLE_TIMETRACKING = true
+NO_REPLY_ADDRESS = noreply.
 
-[server.SSH_DOMAIN]
-ENABLED            = true
-DOMAIN             = $domain
-PORT               = 22
-HTTPS_CONFIG
-else 
-    cat << NO_HTTPS_CONFIG
-[server.SSH_DOMAIN]
-ENABLED            = false
-NO_HTTPS_CONFIG
-fi )
+[mailer]
+ENABLED = false
 
-# ... other sections and settings can be added as needed
+[log]
+MODE      = file
+LEVEL     = Info
+ROOT_PATH = /var/log/gitea
+
+[session]
+PROVIDER = file
 EOF
 
-    ((step++))
+# Replace placeholders in app.ini with dynamic values
+sed -i "s/DOMAIN           =/DOMAIN           = $DOMAIN/" /etc/gitea/app.ini
+sed -i "s|ROOT_URL         =|ROOT_URL         = http://$DOMAIN/|" /etc/gitea/app.ini
+sed -i "s|SECRET_KEY     =|SECRET_KEY     = $(openssl rand -base64 32)|" /etc/gitea/app.ini
+sed -i "s|INTERNAL_TOKEN =|INTERNAL_TOKEN = $(openssl rand -base64 32)|" /etc/gitea/app.ini
+sed -i "s|NO_REPLY_ADDRESS = noreply.|NO_REPLY_ADDRESS = noreply.$DOMAIN|" /etc/gitea/app.ini
 
-    # 6. Create Gitea systemd service file
-    echo "[$step/$total_steps] Creating Gitea service..."
-    cat << EOF > /etc/systemd/system/gitea.service
+# Configure Gitea with SSL if chosen
+if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
+    # Request Let's Encrypt certificate
+    certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL"
+
+    SSL_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+    SSL_KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+
+    # Update configuration to use HTTPS
+    sed -i "s/HTTP_PORT        = 80/HTTP_PORT        = 443/" /etc/gitea/app.ini
+    sed -i "s|PROTOCOL         = http|PROTOCOL         = https|" /etc/gitea/app.ini
+    sed -i "s|CERT_FILE        =|CERT_FILE        = $SSL_CERT|" /etc/gitea/app.ini
+    sed -i "s|KEY_FILE         =|KEY_FILE         = $SSL_KEY|" /etc/gitea/app.ini
+    sed -i "s|ROOT_URL         = http://|ROOT_URL         = https://|" /etc/gitea/app.ini
+
+    echo "Gitea configured to use HTTPS with Let's Encrypt certificate."
+else
+    echo "Gitea configured to use HTTP."
+fi
+
+# Create Gitea service file
+cat <<EOF | tee /etc/systemd/system/gitea.service
 [Unit]
-Description=Gitea (Git with a cup of tea)
+Description=Gitea
 After=syslog.target
 After=network.target
 
@@ -143,29 +140,31 @@ Group=git
 WorkingDirectory=/var/lib/gitea/
 ExecStart=/usr/local/bin/gitea web --config /etc/gitea/app.ini
 Restart=always
-Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
+Environment=USER=git HOME=/var/lib/gitea GITEA_WORK_DIR=/var/lib/gitea
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
 EOF
-    ((step++))
 
-    # 7. Enable and start Gitea service
-    systemctl daemon-reload >/dev/null 2>&1
-    systemctl enable gitea >/dev/null 2>&1
-    systemctl start gitea >/dev/null 2>&1
+# Reload systemd and start Gitea service
+systemctl daemon-reload
+systemctl enable gitea
+systemctl start gitea
 
-    # 8. Set /etc/gitea to read-only
-    chmod -R go-w /etc/gitea >/dev/null 2>&1
-
-    touch /var/lib/gitea/.first_login_complete
-
-    echo "----------------------------------------"
-    echo "  Gitea setup complete!                "
-    if $request_ssl; then
-        echo "  Access it at https://$domain         "
-    else
-        echo "  Access it at http://$domain         "
-    fi
-    echo "----------------------------------------"
+# Setup firewall (optional)
+if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
+    ufw allow 443/tcp
+else
+    ufw allow 80/tcp
 fi
+
+# Display setup completion message
+if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
+    echo "Gitea installation is complete. You can access it at https://$DOMAIN"
+else
+    echo "Gitea installation is complete. You can access it at http://$DOMAIN"
+fi
+
+echo "Log in with the admin credentials provided during setup."
