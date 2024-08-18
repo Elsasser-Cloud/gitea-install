@@ -10,7 +10,7 @@ success() {
     echo -e "\e[1;32m✔ $1\e[0m"
 }
 
-# Function to display error message
+# Function to display error message and wait for user input
 error() {
     echo -e "\e[1;31m✘ $1\e[0m"
     echo -e "\e[1;33mPress any key to return to the shell...\e[0m"
@@ -172,3 +172,8 @@ else
     echo -e "\e[1;32mYou can access Gitea at: http://$DOMAIN\e[0m"
 fi
 echo -e "\e[1;32mAdmin user has been created with the provided credentials.\e[0m"
+
+# Step 10: Remove the script itself
+step $CURRENT_STEP "Cleaning up installation script"
+rm -- "$0" || error "Failed to remove the installation script"
+success "Installation script removed. Goodbye!"
