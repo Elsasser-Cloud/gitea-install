@@ -13,6 +13,8 @@ success() {
 # Function to display error message
 error() {
     echo -e "\e[1;31m✘ $1\e[0m"
+    echo -e "\e[1;33mPress any key to return to the shell...\e[0m"
+    read -n 1 -s  # Wait for the user to press a key
     exit 1
 }
 
