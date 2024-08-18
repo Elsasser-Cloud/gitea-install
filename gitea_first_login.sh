@@ -11,9 +11,6 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     step=1
     total_steps=6 # Adjusted for the additional step
 
-    log_file="/tmp/gitea_setup.log"
-    exec > >(tee -a "$log_file") 2>&1 # Redirect all output to log file and terminal
-
     # 1. Install Gitea (with enhanced architecture detection)
     echo "[$step/$total_steps] Installing Gitea..."
     arch=$(uname -m)
@@ -31,23 +28,31 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     # Manually specify the download URL (replace with the actual URL from the Gitea website)
     wget_url="https://dl.gitea.io/gitea/1.18.5/gitea-1.18.5-$gitea_arch" 
 
-    # Download with verbose output (removed --max-redirect=0)
-    wget -O /tmp/gitea "$wget_url" -v 
+    # Download (removed verbose output and --max-redirect=0)
+    wget -O /tmp/gitea "$wget_url" >/dev/null 2>&1
     if [ $? -ne 0 ]; then
-        echo "Error downloading Gitea binary from $wget_url. Please check the URL and try again."
+        echo "Error downloading Gitea binary. Please check the URL and try again."
         exit 1
     fi
 
-    chmod +x /tmp/gitea 
-    mv /tmp/gitea /usr/local/bin/gitea 
+    chmod +x /tmp/gitea >/dev/null 2>&1
+    mv /tmp/gitea /usr/local/bin/gitea >/dev/null 2>&1
     ((step++))
 
-    # 2. Create 'git' user and directories
+    # 2. Create 'git' user and directories (using the official adduser command)
     echo "[$step/$total_steps] Creating Gitea user and directories..."
-    useradd --system --shell /bin/bash --comment 'Gitea' git
-    mkdir -p /var/lib/gitea/{custom,data,indexers,log,public,tmp} 
-    chown -R git:git /var/lib/gitea
-    chmod -R g+rwX /var/lib/gitea
+    adduser \
+       --system \
+       --shell /bin/bash \
+       --gecos 'Git Version Control' \
+       --group \
+       --disabled-password \
+       --home /home/git \
+       git >/dev/null 2>&1
+
+    mkdir -p /var/lib/gitea/{custom,data,indexers,log,public,tmp} >/dev/null 2>&1
+    chown -R git:git /var/lib/gitea >/dev/null 2>&1
+    chmod -R g+rwX /var/lib/gitea >/dev/null 2>&1
     ((step++))
 
     # 3. Ask if SSL certificate is needed and get domain/email if so
@@ -72,7 +77,7 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     if $request_ssl; then
         # 4. Request Let's Encrypt Certificate
         echo "[$step/$total_steps] Requesting SSL certificate..."
-        certbot certonly --standalone -d "$domain" --agree-tos --email "$email" --non-interactive 
+        certbot certonly --standalone -d "$domain" --agree-tos --email "$email" --non-interactive >/dev/null 2>&1
         ((step++))
     else
         echo "Skipping SSL certificate request."
@@ -80,9 +85,9 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
 
     # 5. Create /etc/gitea directory and generate app.ini with gathered info
     echo "[$step/$total_steps] Configuring Gitea..."
-    mkdir -p /etc/gitea
-    chown -R git:git /etc/gitea
-    chmod -R g+rwX /etc/gitea
+    mkdir -p /etc/gitea >/dev/null 2>&1
+    chown -R git:git /etc/gitea >/dev/null 2>&1
+    chmod -R g+rwX /etc/gitea >/dev/null 2>&1
 
     cat << EOF > /etc/gitea/app.ini
 [server]
@@ -146,12 +151,12 @@ EOF
     ((step++))
 
     # 7. Enable and start Gitea service
-    systemctl daemon-reload 
-    systemctl enable gitea 
-    systemctl start gitea 
+    systemctl daemon-reload >/dev/null 2>&1
+    systemctl enable gitea >/dev/null 2>&1
+    systemctl start gitea >/dev/null 2>&1
 
     # 8. Set /etc/gitea to read-only
-    chmod -R go-w /etc/gitea
+    chmod -R go-w /etc/gitea >/dev/null 2>&1
 
     touch /var/lib/gitea/.first_login_complete
 
