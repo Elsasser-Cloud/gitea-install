@@ -31,19 +31,11 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     # Manually specify the download URL (replace with the actual URL from the Gitea website)
     wget_url="https://dl.gitea.io/gitea/1.18.5/gitea-1.18.5-$gitea_arch" 
 
-    # Download with redirect handling and verbose output
+    # Download with verbose output (removed --max-redirect=0)
     wget -O /tmp/gitea "$wget_url" -v 
     if [ $? -ne 0 ]; then
-        if [ -f /tmp/gitea ]; then
-            # Check if the downloaded file is HTML (indicating a redirect)
-            if grep -q "<!DOCTYPE html>" /tmp/gitea; then
-                echo "Download was redirected. Please check the URL and try again."
-                exit 1
-            fi
-        else
-            echo "Error downloading Gitea binary from $wget_url"
-            exit 1
-        fi
+        echo "Error downloading Gitea binary from $wget_url. Please check the URL and try again."
+        exit 1
     fi
 
     chmod +x /tmp/gitea 
@@ -56,9 +48,15 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     mkdir -p /var/lib/gitea/{custom,data,indexers,log,public,tmp} 
     chown -R git:git /var/lib/gitea
     chmod -R g+rwX /var/lib/gitea
+
+    # 3. Create /etc/gitea directory and set permissions
+    mkdir -p /etc/gitea
+    chown -R git:git /etc/gitea
+    chmod -R g+rwX /etc/gitea
+
     ((step++))
 
-    # 3. Create Gitea systemd service file
+    # 4. Create Gitea systemd service file
     echo "[$step/$total_steps] Creating Gitea service..."
     cat << EOF > /etc/systemd/system/gitea.service
 [Unit]
@@ -81,7 +79,7 @@ WantedBy=multi-user.target
 EOF
     ((step++))
 
-    # 4. Ask if SSL certificate is needed
+    # 5. Ask if SSL certificate is needed
     echo "[$step/$total_steps] SSL Certificate configuration"
     while true; do
         read -p "Do you want to request a Let's Encrypt SSL certificate? (y/n): " yn
@@ -94,13 +92,13 @@ EOF
     ((step++))
 
     if $request_ssl; then
-        # 5. Get Domain and Email
+        # 6. Get Domain and Email
         echo "[$step/$total_steps] Gathering information..."
         read -p "Enter your domain name (e.g., git.example.com): " domain
         read -p "Enter your email address for Let's Encrypt: " email
         ((step++))
 
-        # 6. Request Let's Encrypt Certificate
+        # 7. Request Let's Encrypt Certificate
         echo "[$step/$total_steps] Requesting SSL certificate..."
         certbot certonly --standalone -d "$domain" --agree-tos --email "$email" --non-interactive 
         ((step++))
@@ -110,7 +108,7 @@ EOF
     fi
 
 
-    # 7. Configure Gitea 
+    # 8. Configure Gitea 
     echo "[$step/$total_steps] Configuring Gitea..."
     # (a) Set Domain and SQLite in Gitea Configuration
     gitea_config=/etc/gitea/app.ini # Adjust if your Gitea config is elsewhere
@@ -124,10 +122,13 @@ EOF
         sed -i "s/\# KEY_FILE  = custom\/https-key.pem/KEY_FILE  = \/etc\/letsencrypt\/live\/$domain\/privkey.pem/g" "$gitea_config" 
     fi
 
-    # 8. Enable and start Gitea service
+    # 9. Enable and start Gitea service
     systemctl daemon-reload 
     systemctl enable gitea 
     systemctl start gitea 
+
+    # 10. Set /etc/gitea to read-only
+    chmod -R go-w /etc/gitea
 
     touch /var/lib/gitea/.first_login_complete
 
