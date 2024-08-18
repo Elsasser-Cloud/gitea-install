@@ -92,8 +92,8 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     cat << EOF > /etc/gitea/app.ini
 [server]
 DOMAIN           = $domain
-HTTP_PORT       = 3000              # Or the port you want to use
-ROOT_URL         = %(PROTOCOL)s://%(DOMAIN)s:%(HTTP_PORT)s/
+HTTP_PORT       = 3000              
+ROOT_URL         = http://$domain:3000/ # Use http:// by default
 
 [database]
 DB_TYPE          = sqlite3
@@ -105,15 +105,15 @@ SECRET_KEY       = <generate_a_strong_secret_key>
 
 $(if $request_ssl; then
     cat << HTTPS_CONFIG
+[server]
+PROTOCOL         = https
+CERT_FILE        = /etc/letsencrypt/live/$domain/fullchain.pem
+KEY_FILE         = /etc/letsencrypt/live/$domain/privkey.pem
+
 [server.SSH_DOMAIN]
 ENABLED            = true
 DOMAIN             = $domain
 PORT               = 22
-
-[tls]
-ENABLED            = true
-CERT_FILE          = /etc/letsencrypt/live/$domain/fullchain.pem
-KEY_FILE           = /etc/letsencrypt/live/$domain/privkey.pem
 HTTPS_CONFIG
 else 
     cat << NO_HTTPS_CONFIG
