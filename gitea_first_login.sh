@@ -11,7 +11,7 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     step=1
     total_steps=6 # Adjusted for the additional step
 
-    # 1. Install Gitea (with enhanced architecture detection)
+    # 1. Install Gitea (with manual URL and redirect handling)
     echo "[$step/$total_steps] Installing Gitea..."
     arch=$(uname -m)
     case "$arch" in
@@ -25,11 +25,22 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
             ;;
     esac
 
-    wget_url="https://dl.gitea.io/gitea/$(curl -s https://dl.gitea.io/gitea/latest/ | grep -o "gitea-[0-9.]*-$gitea_arch" | head -n 1)"
-    wget -O /tmp/gitea "$wget_url" >/dev/null 2>&1
+    # Manually specify the download URL (replace with the actual URL from the Gitea website)
+    wget_url="https://dl.gitea.io/gitea/1.18.5/gitea-1.18.5-$gitea_arch" 
+
+    # Download with redirect handling
+    wget -O /tmp/gitea --max-redirect=0 "$wget_url" >/dev/null 2>&1
     if [ $? -ne 0 ]; then
-        echo "Error downloading Gitea binary from $wget_url"
-        exit 1
+        if [ -f /tmp/gitea ]; then
+            # Check if the downloaded file is HTML (indicating a redirect)
+            if grep -q "<!DOCTYPE html>" /tmp/gitea; then
+                echo "Download was redirected. Please check the URL and try again."
+                exit 1
+            fi
+        else
+            echo "Error downloading Gitea binary from $wget_url"
+            exit 1
+        fi
     fi
 
     chmod +x /tmp/gitea >/dev/null 2>&1
