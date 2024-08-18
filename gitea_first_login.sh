@@ -38,7 +38,7 @@ useradd --system --create-home --home-dir /var/lib/gitea --shell /bin/bash --com
 
 # Create necessary directories
 mkdir -p /etc/gitea /var/lib/gitea /var/log/gitea
-chown git:git /etc/gitea /var/lib/gitea /var/log/gitea
+chown -R git:git /etc/gitea /var/lib/gitea /var/log/gitea
 chmod 750 /var/lib/gitea /var/log/gitea
 
 # Download Gitea binary based on detected architecture
@@ -46,25 +46,17 @@ GITEA_VERSION="1.18.0"
 wget -O /usr/local/bin/gitea https://dl.gitea.io/gitea/${GITEA_VERSION}/gitea-${GITEA_VERSION}-linux-${GITEA_ARCH}
 chmod +x /usr/local/bin/gitea
 
-# Create a base Gitea configuration file
+# Create a minimized Gitea configuration file
 cat <<EOF > /etc/gitea/app.ini
 APP_NAME = Gitea: Git with a cup of tea
 RUN_USER = git
 RUN_MODE = prod
 
 [server]
-DOMAIN           = 
+DOMAIN           = $DOMAIN
 HTTP_PORT        = 80
-ROOT_URL         = 
-DISABLE_SSH      = false
-SSH_PORT         = 22
-START_SSH_SERVER = true
-OFFLINE_MODE     = false
-LFS_START_SERVER = true
-LFS_CONTENT_PATH = /var/lib/gitea/data/lfs
+ROOT_URL         = http://$DOMAIN/
 PROTOCOL         = http
-CERT_FILE        = 
-KEY_FILE         = 
 
 [database]
 DB_TYPE  = sqlite3
@@ -72,38 +64,14 @@ PATH     = /var/lib/gitea/data/gitea.db
 
 [security]
 INSTALL_LOCK   = true
-SECRET_KEY     = 
-INTERNAL_TOKEN = 
-
-[service]
-REGISTER_EMAIL_CONFIRM = false
-ENABLE_NOTIFY_MAIL     = false
-DISABLE_REGISTRATION   = true
-ALLOW_ONLY_EXTERNAL_REGISTRATION = false
-ENABLE_CAPTCHA = false
-DEFAULT_KEEP_EMAIL_PRIVATE = false
-DEFAULT_ALLOW_CREATE_ORGANIZATION = true
-DEFAULT_ENABLE_TIMETRACKING = true
-NO_REPLY_ADDRESS = noreply.
-
-[mailer]
-ENABLED = false
+SECRET_KEY     = $(openssl rand -base64 32)
+INTERNAL_TOKEN = $(openssl rand -base64 32)
 
 [log]
 MODE      = file
 LEVEL     = Info
 ROOT_PATH = /var/log/gitea
-
-[session]
-PROVIDER = file
 EOF
-
-# Replace placeholders in app.ini with dynamic values
-sed -i "s/DOMAIN           =/DOMAIN           = $DOMAIN/" /etc/gitea/app.ini
-sed -i "s|ROOT_URL         =|ROOT_URL         = http://$DOMAIN/|" /etc/gitea/app.ini
-sed -i "s|SECRET_KEY     =|SECRET_KEY     = $(openssl rand -base64 32)|" /etc/gitea/app.ini
-sed -i "s|INTERNAL_TOKEN =|INTERNAL_TOKEN = $(openssl rand -base64 32)|" /etc/gitea/app.ini
-sed -i "s|NO_REPLY_ADDRESS = noreply.|NO_REPLY_ADDRESS = noreply.$DOMAIN|" /etc/gitea/app.ini
 
 # Configure Gitea with SSL if chosen
 if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
@@ -116,14 +84,18 @@ if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
     # Update configuration to use HTTPS
     sed -i "s/HTTP_PORT        = 80/HTTP_PORT        = 443/" /etc/gitea/app.ini
     sed -i "s|PROTOCOL         = http|PROTOCOL         = https|" /etc/gitea/app.ini
-    sed -i "s|CERT_FILE        =|CERT_FILE        = $SSL_CERT|" /etc/gitea/app.ini
-    sed -i "s|KEY_FILE         =|KEY_FILE         = $SSL_KEY|" /etc/gitea/app.ini
     sed -i "s|ROOT_URL         = http://|ROOT_URL         = https://|" /etc/gitea/app.ini
+    sed -i "s|# CERT_FILE        =|CERT_FILE        = $SSL_CERT|" /etc/gitea/app.ini
+    sed -i "s|# KEY_FILE         =|KEY_FILE         = $SSL_KEY|" /etc/gitea/app.ini
 
     echo "Gitea configured to use HTTPS with Let's Encrypt certificate."
 else
     echo "Gitea configured to use HTTP."
 fi
+
+# Ensure the app.ini file has the correct ownership and permissions
+chown git:git /etc/gitea/app.ini
+chmod 640 /etc/gitea/app.ini
 
 # Create Gitea service file
 cat <<EOF | tee /etc/systemd/system/gitea.service
