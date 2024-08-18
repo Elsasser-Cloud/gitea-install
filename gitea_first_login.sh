@@ -151,7 +151,7 @@ CURRENT_STEP=$((CURRENT_STEP + 1))
 # Step 8: Create the admin user
 step $CURRENT_STEP "Creating Gitea admin user"
 sleep 10
-/usr/local/bin/gitea admin user create --username "$ADMIN_USER" --password "$ADMIN_PASS" --email "$ADMIN_EMAIL" --admin --config /etc/gitea/app.ini || error "Failed to create admin user"
+su - git -c "/usr/local/bin/gitea admin user create --username '$ADMIN_USER' --password '$ADMIN_PASS' --email '$ADMIN_EMAIL' --admin --config /etc/gitea/app.ini" || error "Failed to create admin user"
 success "Admin user created"
 CURRENT_STEP=$((CURRENT_STEP + 1))
 
