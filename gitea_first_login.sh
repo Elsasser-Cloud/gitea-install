@@ -125,6 +125,12 @@ systemctl daemon-reload
 systemctl enable gitea
 systemctl start gitea
 
+# Wait a few seconds for Gitea to initialize
+sleep 10
+
+# Create the admin user
+/usr/local/bin/gitea admin user create --username "$ADMIN_USER" --password "$ADMIN_PASS" --email "$ADMIN_EMAIL" --admin --config /etc/gitea/app.ini
+
 # Setup firewall (optional)
 if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
     ufw allow 443/tcp
@@ -139,4 +145,4 @@ else
     echo "Gitea installation is complete. You can access it at http://$DOMAIN"
 fi
 
-echo "Log in with the admin credentials provided during setup."
+echo "Admin user has been created with the provided credentials."
