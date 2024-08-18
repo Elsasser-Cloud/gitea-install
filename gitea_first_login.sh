@@ -32,7 +32,7 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     wget_url="https://dl.gitea.io/gitea/1.18.5/gitea-1.18.5-$gitea_arch" 
 
     # Download with redirect handling and verbose output
-    wget -O /tmp/gitea --max-redirect=0 "$wget_url" -v 
+    wget -O /tmp/gitea "$wget_url" -v 
     if [ $? -ne 0 ]; then
         if [ -f /tmp/gitea ]; then
             # Check if the downloaded file is HTML (indicating a redirect)
