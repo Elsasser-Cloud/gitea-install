@@ -11,7 +11,10 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     step=1
     total_steps=6 # Adjusted for the additional step
 
-    # 1. Install Gitea (with manual URL and redirect handling)
+    log_file="/tmp/gitea_setup.log"
+    exec > >(tee -a "$log_file") 2>&1 # Redirect all output to log file and terminal
+
+    # 1. Install Gitea (with enhanced architecture detection)
     echo "[$step/$total_steps] Installing Gitea..."
     arch=$(uname -m)
     case "$arch" in
@@ -28,8 +31,8 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
     # Manually specify the download URL (replace with the actual URL from the Gitea website)
     wget_url="https://dl.gitea.io/gitea/1.18.5/gitea-1.18.5-$gitea_arch" 
 
-    # Download with redirect handling
-    wget -O /tmp/gitea --max-redirect=0 "$wget_url" >/dev/null 2>&1
+    # Download with redirect handling and verbose output
+    wget -O /tmp/gitea --max-redirect=0 "$wget_url" -v 
     if [ $? -ne 0 ]; then
         if [ -f /tmp/gitea ]; then
             # Check if the downloaded file is HTML (indicating a redirect)
@@ -43,16 +46,16 @@ if [ ! -f /var/lib/gitea/.first_login_complete ]; then
         fi
     fi
 
-    chmod +x /tmp/gitea >/dev/null 2>&1
-    mv /tmp/gitea /usr/local/bin/gitea >/dev/null 2>&1
+    chmod +x /tmp/gitea 
+    mv /tmp/gitea /usr/local/bin/gitea 
     ((step++))
 
     # 2. Create 'git' user and directories
     echo "[$step/$total_steps] Creating Gitea user and directories..."
-    useradd --system --shell /bin/bash --comment 'Gitea' git >/dev/null 2>&1 
-    mkdir -p /var/lib/gitea/{custom,data,indexers,log,public,tmp} >/dev/null 2>&1
-    chown -R git:git /var/lib/gitea >/dev/null 2>&1
-    chmod -R g+rwX /var/lib/gitea >/dev/null 2>&1
+    useradd --system --shell /bin/bash --comment 'Gitea' git
+    mkdir -p /var/lib/gitea/{custom,data,indexers,log,public,tmp} 
+    chown -R git:git /var/lib/gitea
+    chmod -R g+rwX /var/lib/gitea
     ((step++))
 
     # 3. Create Gitea systemd service file
@@ -99,7 +102,7 @@ EOF
 
         # 6. Request Let's Encrypt Certificate
         echo "[$step/$total_steps] Requesting SSL certificate..."
-        certbot certonly --standalone -d "$domain" --agree-tos --email "$email" --non-interactive >/dev/null 2>&1
+        certbot certonly --standalone -d "$domain" --agree-tos --email "$email" --non-interactive 
         ((step++))
     else
         echo "Skipping SSL certificate request."
@@ -108,24 +111,23 @@ EOF
 
 
     # 7. Configure Gitea 
-    ((step++))
     echo "[$step/$total_steps] Configuring Gitea..."
     # (a) Set Domain and SQLite in Gitea Configuration
     gitea_config=/etc/gitea/app.ini # Adjust if your Gitea config is elsewhere
-    sed -i "s/DOMAIN = localhost/DOMAIN = $domain/g" "$gitea_config" >/dev/null 2>&1
-    sed -i "s/DB_TYPE\s*=\s*mysql/DB_TYPE = sqlite3/g" "$gitea_config" >/dev/null 2>&1
-    sed -i "s/PATH\s*=\s*data\/gitea.db/PATH\s*=\s*\/var\/lib\/gitea\/gitea.db/g" "$gitea_config" >/dev/null 2>&1
+    sed -i "s/DOMAIN = localhost/DOMAIN = $domain/g" "$gitea_config" 
+    sed -i "s/DB_TYPE\s*=\s*mysql/DB_TYPE = sqlite3/g" "$gitea_config"
+    sed -i "s/PATH\s*=\s*data\/gitea.db/PATH\s*=\s*\/var\/lib\/gitea\/gitea.db/g" "$gitea_config"
 
     if $request_ssl; then
         # (b) Configure HTTPS (Assuming Certbot places certs in /etc/letsencrypt/live/)
-        sed -i "s/\# CERT_FILE = custom\/https-cert.pem/CERT_FILE = \/etc\/letsencrypt\/live\/$domain\/fullchain.pem/g" "$gitea_config" >/dev/null 2>&1
-        sed -i "s/\# KEY_FILE  = custom\/https-key.pem/KEY_FILE  = \/etc\/letsencrypt\/live\/$domain\/privkey.pem/g" "$gitea_config" >/dev/null 2>&1
+        sed -i "s/\# CERT_FILE = custom\/https-cert.pem/CERT_FILE = \/etc\/letsencrypt\/live\/$domain\/fullchain.pem/g" "$gitea_config"
+        sed -i "s/\# KEY_FILE  = custom\/https-key.pem/KEY_FILE  = \/etc\/letsencrypt\/live\/$domain\/privkey.pem/g" "$gitea_config" 
     fi
 
     # 8. Enable and start Gitea service
-    systemctl daemon-reload >/dev/null 2>&1
-    systemctl enable gitea >/dev/null 2>&1
-    systemctl start gitea >/dev/null 2>&1
+    systemctl daemon-reload 
+    systemctl enable gitea 
+    systemctl start gitea 
 
     touch /var/lib/gitea/.first_login_complete
 
