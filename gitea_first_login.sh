@@ -83,6 +83,7 @@ DOMAIN           = $DOMAIN
 HTTP_PORT        = 80
 ROOT_URL         = http://$DOMAIN/
 PROTOCOL         = http
+APP_DATA_PATH    = /var/lib/gitea/data
 
 [database]
 DB_TYPE  = sqlite3
