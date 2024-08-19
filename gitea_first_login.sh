@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Set safety options
-set -euo pipefail
-
 # Constants
 LOCK_FILE="/var/lock/gitea_install.lock"
 GITEA_VERSION="1.18.0"
@@ -11,13 +8,16 @@ APP_DATA_PATH="/var/lib/gitea/data"
 LOG_FILE="/var/log/gitea_install.log"
 SCRIPT_PATH=$(realpath "$0")  # Get the absolute path of the script
 
-# Cleanup function to run on exit
+# Create a log file and redirect stdout/stderr to it
+exec > >(tee -i "$LOG_FILE") 2>&1
+
+# Function to perform cleanup on script exit
 cleanup() {
     echo "Cleaning up..."
     rm -f "$LOCK_FILE"
-    rm -f "$SCRIPT_PATH"  # Safely remove the script itself after completion
+    rm -f "$SCRIPT_PATH"
 }
-
+trap cleanup EXIT
 
 # Check for the lock file as soon as possible
 if [ -f "$LOCK_FILE" ]; then
@@ -26,9 +26,6 @@ if [ -f "$LOCK_FILE" ]; then
     exit 1
 fi
 touch "$LOCK_FILE"
-
-# Create a log file and redirect stdout/stderr to it
-exec > >(tee -i "$LOG_FILE") 2>&1
 
 # Functions
 
@@ -42,17 +39,13 @@ success() {
     echo -e "\e[1;32m✔ $1\e[0m"
 }
 
-# Function to display error message and wait for user input
+# Function to display error message
 error() {
     echo -e "\e[1;31m✘ $1\e[0m"
-    echo -e "\e[1;33mPress any key to return to the shell...\e[0m"
+    echo -e "\e[1;33mCheck the log at $LOG_FILE for details. Press any key to return to the shell...\e[0m"
     read -n 1 -s  # Wait for the user to press a key
     exit 1
 }
-
-# Total number of steps in the installation process
-TOTAL_STEPS=9
-CURRENT_STEP=1
 
 # Function to detect system architecture
 detect_architecture() {
@@ -87,7 +80,9 @@ collect_config() {
 # Function to update system and install dependencies
 install_dependencies() {
     step $CURRENT_STEP "Updating system and installing dependencies"
-    apt-get update -qq && apt-get upgrade -y -qq && apt-get install -y -qq git wget certbot sqlite3 || error "Failed to install dependencies"
+    if ! apt-get update -qq && apt-get upgrade -y -qq && apt-get install -y -qq git wget certbot sqlite3; then
+        error "Failed to install dependencies"
+    fi
     success "System updated and dependencies installed"
     CURRENT_STEP=$((CURRENT_STEP + 1))
 }
@@ -95,8 +90,12 @@ install_dependencies() {
 # Function to create Gitea user and directories
 setup_gitea_user() {
     step $CURRENT_STEP "Creating Gitea user and setting up directories"
-    useradd --system --create-home --home-dir /var/lib/gitea --shell /bin/bash --comment 'Gitea application' git || error "Failed to create Gitea user"
-    mkdir -p /etc/gitea /var/lib/gitea /var/log/gitea || error "Failed to create directories"
+    if ! useradd --system --create-home --home-dir /var/lib/gitea --shell /bin/bash --comment 'Gitea application' git; then
+        error "Failed to create Gitea user"
+    fi
+    if ! mkdir -p /etc/gitea /var/lib/gitea /var/log/gitea; then
+        error "Failed to create directories"
+    fi
     chown -R git:git /etc/gitea /var/lib/gitea /var/log/gitea
     chmod 750 /var/lib/gitea /var/log/gitea
     success "Gitea user and directories set up"
@@ -106,8 +105,12 @@ setup_gitea_user() {
 # Function to download and install Gitea binary
 install_gitea() {
     step $CURRENT_STEP "Downloading and installing Gitea binary"
-    wget -q -O /usr/local/bin/gitea "$GITEA_BINARY_URL" || error "Failed to download Gitea"
-    chmod +x /usr/local/bin/gitea || error "Failed to make Gitea executable"
+    if ! wget -q -O /usr/local/bin/gitea "$GITEA_BINARY_URL"; then
+        error "Failed to download Gitea"
+    fi
+    if ! chmod +x /usr/local/bin/gitea; then
+        error "Failed to make Gitea executable"
+    fi
     success "Gitea binary installed"
     CURRENT_STEP=$((CURRENT_STEP + 1))
 }
@@ -145,7 +148,9 @@ EOF
     # Configure SSL if chosen
     if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
         step $CURRENT_STEP "Configuring SSL with Let's Encrypt"
-        certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" || error "Failed to obtain SSL certificate"
+        if ! certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL"; then
+            error "Failed to obtain SSL certificate"
+        fi
         SSL_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
         SSL_KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
         sed -i "s/HTTP_PORT        = 80/HTTP_PORT        = 443/" /etc/gitea/app.ini
@@ -187,9 +192,15 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload || error "Failed to reload systemd daemon"
-    systemctl enable gitea || error "Failed to enable Gitea service"
-    systemctl start gitea || error "Failed to start Gitea service"
+    if ! systemctl daemon-reload; then
+        error "Failed to reload systemd daemon"
+    fi
+    if ! systemctl enable gitea; then
+        error "Failed to enable Gitea service"
+    fi
+    if ! systemctl start gitea; then
+        error "Failed to start Gitea service"
+    fi
     success "Gitea service set up and started"
     CURRENT_STEP=$((CURRENT_STEP + 1))
 }
@@ -198,8 +209,7 @@ EOF
 create_admin_user() {
     step $CURRENT_STEP "Creating Gitea admin user"
     sleep 10
-    sudo -u git /usr/local/bin/gitea admin user create --username "$ADMIN_USER" --password "$ADMIN_PASS" --email "$ADMIN_EMAIL" --admin --config /etc/gitea/app.ini
-    if [ $? -ne 0 ]; then
+    if ! sudo -u git /usr/local/bin/gitea admin user create --username "$ADMIN_USER" --password "$ADMIN_PASS" --email "$ADMIN_EMAIL" --admin --config /etc/gitea/app.ini; then
         error "Failed to create admin user"
     fi
     success "Admin user created"
@@ -210,9 +220,13 @@ create_admin_user() {
 configure_firewall() {
     step $CURRENT_STEP "Configuring firewall"
     if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
-        ufw allow 443/tcp || error "Failed to allow HTTPS traffic"
+        if ! ufw allow 443/tcp; then
+            error "Failed to allow HTTPS traffic"
+        fi
     else
-        ufw allow 80/tcp || error "Failed to allow HTTP traffic"
+        if ! ufw allow 80/tcp; then
+            error "Failed to allow HTTP traffic"
+        fi
     fi
     success "Firewall configured"
 }
@@ -237,5 +251,5 @@ else
 fi
 echo -e "\e[1;32mAdmin user has been created with the provided credentials.\e[0m"
 
-
+# Final cleanup: remove the script itself
 cleanup
