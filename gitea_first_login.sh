@@ -17,7 +17,7 @@ cleanup() {
     rm -f "$LOCK_FILE"
     rm -f "$SCRIPT_PATH"  # Safely remove the script itself after completion
 }
-trap cleanup EXIT
+
 
 # Check for the lock file as soon as possible
 if [ -f "$LOCK_FILE" ]; then
@@ -236,3 +236,6 @@ else
     echo -e "\e[1;32mYou can access Gitea at: http://$DOMAIN\e[0m"
 fi
 echo -e "\e[1;32mAdmin user has been created with the provided credentials.\e[0m"
+
+
+cleanup
