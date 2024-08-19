@@ -15,6 +15,7 @@ exec > >(tee -i "$LOG_FILE") 2>&1
 if [ -f "$LOCK_FILE" ]; then
     echo -e "\e[1;31mThe gitea installation script has already been run and did not finish successfully. If you want to run it again, please delete the lock file:\e[0m"
     echo "sudo rm -f $LOCK_FILE"
+    echo -e "\e[1;33mPress any key to return to the shell...\e[0m"
     read -n 1 -s
     exit 1
 fi
