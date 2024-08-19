@@ -7,6 +7,7 @@ LOCK_FILE="/var/lock/gitea_install.lock"
 if [ -f "$LOCK_FILE" ]; then
     echo -e "\e[1;31mThe gitea installation script has already been run and did not finish successfully. If you want to run it again, please delete the lock file:\e[0m"
     echo "sudo rm -f $LOCK_FILE"
+    read -n 1 -s  # Wait for the user to press a key
     exit 1
 fi
 
