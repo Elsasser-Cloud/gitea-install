@@ -11,6 +11,17 @@ SCRIPT_PATH=$(realpath "$0")  # Get the absolute path of the script
 # Create a log file and redirect stdout/stderr to it
 exec > >(tee -i "$LOG_FILE") 2>&1
 
+# Check for the lock file as soon as possible
+if [ -f "$LOCK_FILE" ]; then
+    echo -e "\e[1;31mThe gitea installation script has already been run and did not finish successfully. If you want to run it again, please delete the lock file:\e[0m"
+    echo "sudo rm -f $LOCK_FILE"
+    read -n 1 -s
+    exit 1
+fi
+touch "$LOCK_FILE"
+
+# Functions
+
 # Function to perform cleanup on script exit
 cleanup() {
     echo "Cleaning up..."
@@ -18,16 +29,6 @@ cleanup() {
     rm -f "$SCRIPT_PATH"
 }
 trap cleanup EXIT
-
-# Check for the lock file as soon as possible
-if [ -f "$LOCK_FILE" ]; then
-    echo -e "\e[1;31mThe installation script has already been run. If you want to run it again, please delete the lock file:\e[0m"
-    echo "sudo rm -f $LOCK_FILE"
-    exit 1
-fi
-touch "$LOCK_FILE"
-
-# Functions
 
 # Function to display a step
 step() {
