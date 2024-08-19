@@ -119,23 +119,24 @@ EOF
 # Configure SSL if chosen
 if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
     step $CURRENT_STEP "Configuring SSL with Let's Encrypt"
-    cat <<EOF >> /etc/gitea/app.ini
 
-[server]
-PROTOCOL=https
-DOMAIN=$DOMAIN
-HTTP_PORT=443
-ROOT_URL=https://$DOMAIN/
-CERT_FILE=/var/lib/gitea/https/cert.pem
-KEY_FILE=/var/lib/gitea/https/key.pem
-ENABLE_ACME=true
-ACME_ACCEPTTOS=true
-ACME_EMAIL=$ADMIN_EMAIL
-ACME_DIRECTORY=https://acme-v02.api.letsencrypt.org/directory
-EOF
+    # Update the configuration values in app.ini
+    sed -i "s/^PROTOCOL\s*=.*/PROTOCOL=https/" /etc/gitea/app.ini
+    sed -i "s/^DOMAIN\s*=.*/DOMAIN=$DOMAIN/" /etc/gitea/app.ini
+    sed -i "s/^HTTP_PORT\s*=.*/HTTP_PORT=443/" /etc/gitea/app.ini
+    sed -i "s|^ROOT_URL\s*=.*|ROOT_URL=https://$DOMAIN/|" /etc/gitea/app.ini
+    sed -i "s|^CERT_FILE\s*=.*|CERT_FILE=/var/lib/gitea/https/cert.pem|" /etc/gitea/app.ini
+    sed -i "s|^KEY_FILE\s*=.*|KEY_FILE=/var/lib/gitea/https/key.pem|" /etc/gitea/app.ini
+
+    # Add ACME settings
+    sed -i "/\[server\]/a ENABLE_ACME=true" /etc/gitea/app.ini
+    sed -i "/\[server\]/a ACME_ACCEPTTOS=true" /etc/gitea/app.ini
+    sed -i "/\[server\]/a ACME_EMAIL=$ADMIN_EMAIL" /etc/gitea/app.ini
+    sed -i "/\[server\]/a ACME_DIRECTORY=https://acme-v02.api.letsencrypt.org/directory" /etc/gitea/app.ini
 
     success "SSL configured with Let's Encrypt via ACME"
 fi
+
 
 chown git:git /etc/gitea/app.ini
 chmod 640 /etc/gitea/app.ini
