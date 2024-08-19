@@ -49,17 +49,17 @@ CURRENT_STEP=$((CURRENT_STEP + 1))
 
 # Step 2: Prompt for Gitea configurations
 step $CURRENT_STEP "Collecting Gitea configuration details"
-echo "\nPlease enter the domain for Gitea (e.g., gitea.example.com):"
+echo -e "\nPlease enter the domain for Gitea (e.g., gitea.example.com):"
 read -r DOMAIN
-echo "\nPlease enter the Gitea admin username:"
+echo -e "\nPlease enter the Gitea admin username:"
 read -r ADMIN_USER
-echo "\nPlease enter the Gitea admin email:"
+echo -e "\nPlease enter the Gitea admin email:"
 read -r ADMIN_EMAIL
-echo "\nPlease enter the Gitea admin password:"
+echo -e "\nPlease enter the Gitea admin password:"
 read -r -s ADMIN_PASS
-echo "\nDo you want to set up a Let's Encrypt SSL certificate for Gitea? (yes/no):"
+echo -e "\nDo you want to set up a Let's Encrypt SSL certificate for Gitea? (yes/no):"
 read -r USE_LETS_ENCRYPT
-echo "\nDo you want to automatically configure ufw for Gitea? (yes/no):"
+echo -e "\nDo you want to automatically configure ufw for Gitea? (yes/no):"
 read -r CONFIGURE_FIREWALL
 success "Configuration details collected"
 CURRENT_STEP=$((CURRENT_STEP + 1))
