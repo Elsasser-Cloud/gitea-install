@@ -5,7 +5,7 @@ LOCK_FILE="/var/lock/gitea_install.lock"
 
 # Check if the script has been run before
 if [ -f "$LOCK_FILE" ]; then
-    echo -e "\e[1;31mThe gitea installation script has already been run and did not finish successfully. If you want to run it again, please delete the lock file:\e[0m"
+    echo -e "\e[1;31mThe Gitea installation script has already been run and did not finish successfully. If you want to run it again, please delete the lock file:\e[0m"
     echo "sudo rm -f $LOCK_FILE"
     read -n 1 -s  # Wait for the user to press a key
     exit 1
@@ -33,7 +33,7 @@ error() {
 }
 
 # Total number of steps in the installation process
-TOTAL_STEPS=9
+TOTAL_STEPS=10
 CURRENT_STEP=1
 
 # Step 1: Detect system architecture
@@ -66,14 +66,14 @@ CURRENT_STEP=$((CURRENT_STEP + 1))
 
 # Step 3: Update and install dependencies
 step $CURRENT_STEP "Updating system and installing dependencies"
-apt-get update -qq && apt-get upgrade -y -qq && apt-get install -y -qq git wget certbot sqlite3 || error "Failed to install dependencies"
+apt-get update -qq && apt-get upgrade -y -qq && apt-get install -y -qq git wget sqlite3 || error "Failed to install dependencies"
 success "System updated and dependencies installed"
 CURRENT_STEP=$((CURRENT_STEP + 1))
 
 # Step 4: Create Gitea user and directories
 step $CURRENT_STEP "Creating Gitea user and setting up directories"
 useradd --system --create-home --home-dir /var/lib/gitea --shell /bin/bash --comment 'Gitea application' git || error "Failed to create Gitea user"
-mkdir -p /etc/gitea /var/lib/gitea /var/log/gitea || error "Failed to create directories"
+mkdir -p /etc/gitea /var/lib/gitea /var/log/gitea /var/lib/gitea/https || error "Failed to create directories"
 chown -R git:git /etc/gitea /var/lib/gitea /var/log/gitea
 chmod 750 /var/lib/gitea /var/log/gitea
 success "Gitea user and directories set up"
@@ -119,15 +119,22 @@ EOF
 # Configure SSL if chosen
 if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
     step $CURRENT_STEP "Configuring SSL with Let's Encrypt"
-    certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" || error "Failed to obtain SSL certificate"
-    SSL_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-    SSL_KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
-    sed -i "s/HTTP_PORT        = 80/HTTP_PORT        = 443/" /etc/gitea/app.ini
-    sed -i "s|PROTOCOL         = http|PROTOCOL         = https|" /etc/gitea/app.ini
-    sed -i "s|ROOT_URL         = http://|ROOT_URL         = https://|" /etc/gitea/app.ini
-    sed -i "s|# CERT_FILE        =|CERT_FILE        = $SSL_CERT|" /etc/gitea/app.ini
-    sed -i "s|# KEY_FILE         =|KEY_FILE         = $SSL_KEY|" /etc/gitea/app.ini
-    success "SSL configured with Let's Encrypt"
+    cat <<EOF >> /etc/gitea/app.ini
+
+[server]
+PROTOCOL=https
+DOMAIN=$DOMAIN
+HTTP_PORT=443
+ROOT_URL=https://$DOMAIN/
+CERT_FILE=/var/lib/gitea/https/cert.pem
+KEY_FILE=/var/lib/gitea/https/key.pem
+ENABLE_ACME=true
+ACME_ACCEPTTOS=true
+ACME_EMAIL=$ADMIN_EMAIL
+ACME_DIRECTORY=https://acme-v02.api.letsencrypt.org/directory
+EOF
+
+    success "SSL configured with Let's Encrypt via ACME"
 fi
 
 chown git:git /etc/gitea/app.ini
@@ -179,7 +186,7 @@ success "Admin user created"
 CURRENT_STEP=$((CURRENT_STEP + 1))
 
 # Step 9: Configure firewall (optional)
-    if [[ $CONFIGURE_FIREWALL == "yes" ]]; then
+if [[ $CONFIGURE_FIREWALL == "yes" ]]; then
     step $CURRENT_STEP "Configuring firewall"
     if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
         ufw allow 443/tcp || error "Failed to allow HTTPS traffic"
