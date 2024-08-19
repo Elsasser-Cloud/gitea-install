@@ -48,17 +48,17 @@ CURRENT_STEP=$((CURRENT_STEP + 1))
 
 # Step 2: Prompt for Gitea configurations
 step $CURRENT_STEP "Collecting Gitea configuration details"
-echo "Please enter the domain for Gitea (e.g., gitea.example.com):"
+echo "\nPlease enter the domain for Gitea (e.g., gitea.example.com):"
 read -r DOMAIN
-echo "Please enter the Gitea admin username:"
+echo "\nPlease enter the Gitea admin username:"
 read -r ADMIN_USER
-echo "Please enter the Gitea admin email:"
+echo "\nPlease enter the Gitea admin email:"
 read -r ADMIN_EMAIL
-echo "Please enter the Gitea admin password:"
+echo "\nPlease enter the Gitea admin password:"
 read -r -s ADMIN_PASS
-echo "Do you want to set up a Let's Encrypt SSL certificate for Gitea? (yes/no):"
+echo "\nDo you want to set up a Let's Encrypt SSL certificate for Gitea? (yes/no):"
 read -r USE_LETS_ENCRYPT
-echo "Do you want to automatically configure ufw for Gitea? (yes/no):"
+echo "\nDo you want to automatically configure ufw for Gitea? (yes/no):"
 read -r CONFIGURE_FIREWALL
 success "Configuration details collected"
 CURRENT_STEP=$((CURRENT_STEP + 1))
@@ -195,10 +195,9 @@ if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
 else
     echo -e "\e[1;32mYou can access Gitea at: http://$DOMAIN\e[0m"
 fi
-echo -e "\e[1;32mAdmin user has been created with the provided credentials.\e[0m"
 
 # Step 10: Remove the script itself
 step $CURRENT_STEP "Cleaning up installation script"
-rm -- "$0" || error "Failed to remove the installation script"
+rm -f "/etc/profile.d/gitea_first_login.sh" || error "Failed to remove the installation script"
 rm $LOCK_FILE
 success "Installation script removed. Goodbye!"
