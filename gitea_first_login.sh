@@ -1,5 +1,18 @@
 #!/bin/bash
 
+# Define the lock file location
+LOCK_FILE="/var/lock/gitea_install.lock"
+
+# Check if the script has been run before
+if [ -f "$LOCK_FILE" ]; then
+    echo -e "\e[1;31mThe gitea installation script has already been run and did not finish successfully. If you want to run it again, please delete the lock file:\e[0m"
+    echo "sudo rm -f $LOCK_FILE"
+    exit 1
+fi
+
+# Create the lock file to prevent re-execution
+touch "$LOCK_FILE"
+
 # Function to display a step
 step() {
     echo -e "\n\e[1;34m[$1/$TOTAL_STEPS] $2...\e[0m"
@@ -45,6 +58,8 @@ echo "Please enter the Gitea admin password:"
 read -r -s ADMIN_PASS
 echo "Do you want to set up a Let's Encrypt SSL certificate for Gitea? (yes/no):"
 read -r USE_LETS_ENCRYPT
+echo "Do you want to automatically configure ufw for Gitea? (yes/no):"
+read -r CONFIGURE_FIREWALL
 success "Configuration details collected"
 CURRENT_STEP=$((CURRENT_STEP + 1))
 
@@ -157,13 +172,15 @@ success "Admin user created"
 CURRENT_STEP=$((CURRENT_STEP + 1))
 
 # Step 9: Configure firewall (optional)
-step $CURRENT_STEP "Configuring firewall"
-if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
-    ufw allow 443/tcp || error "Failed to allow HTTPS traffic"
-else
-    ufw allow 80/tcp || error "Failed to allow HTTP traffic"
+    if [[ $CONFIGURE_FIREWALL == "yes" ]]; then
+    step $CURRENT_STEP "Configuring firewall"
+    if [[ $USE_LETS_ENCRYPT == "yes" ]]; then
+        ufw allow 443/tcp || error "Failed to allow HTTPS traffic"
+    else
+        ufw allow 80/tcp || error "Failed to allow HTTP traffic"
+    fi
+    success "Firewall configured"
 fi
-success "Firewall configured"
 
 # Completion message
 echo -e "\n\e[1;32m✔ Gitea installation is complete.\e[0m"
@@ -177,4 +194,5 @@ echo -e "\e[1;32mAdmin user has been created with the provided credentials.\e[0m
 # Step 10: Remove the script itself
 step $CURRENT_STEP "Cleaning up installation script"
 rm -- "$0" || error "Failed to remove the installation script"
+rm $LOCK_FILE
 success "Installation script removed. Goodbye!"
